@@ -66,7 +66,6 @@ if uploaded_file is not None:
     except Exception as e:
         st.error(f"An error occurred while processing the Excel file: {e}")
 
-
 if st.session_state.calculation_done:
     analyzed_data = st.session_state.analyzed_data
     calculated_data = st.session_state.calculated_data
@@ -74,14 +73,22 @@ if st.session_state.calculation_done:
     # Format the 'Day' column to remove time part
     analyzed_data['Day'] = pd.to_datetime(analyzed_data['Day']).dt.strftime('%Y-%m-%d')
 
-    # Add toggle for switching between table and bar graph
-    display_option = st.radio(
-        "Select display option:",
-        ("Table", "Bar Graph"),
-        index=0  # Default to "Table"
-    )
+    # Calculate total losses for the selected period
+    total_loss_without_clipping = analyzed_data['Loss_Without_Clipping'].sum()
+    total_loss_with_clipping = analyzed_data['Loss_With_Clipping'].sum()
 
-    # Extract months from the date range if it spans more than one month
+    # Display totals beside the radio button
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        display_option = st.radio(
+            "Select display option:",
+            ("Table", "Bar Graph"),
+            index=0  # Default to "Table"
+        )
+    with col2:
+        st.metric(label="Total Loss Without Clipping (MWh)", value=f"{total_loss_without_clipping:.2f}")
+        st.metric(label="Total Loss With Clipping (MWh)", value=f"{total_loss_with_clipping:.2f}")
+
     analyzed_data['Month'] = pd.to_datetime(analyzed_data['Day']).dt.strftime('%B %Y')
     unique_months = analyzed_data['Month'].unique()
 
@@ -89,15 +96,13 @@ if st.session_state.calculation_done:
     if len(unique_months) > 1:
         selected_month = st.selectbox("Select a Month:", unique_months)
 
-    # Filter data based on selected month
     if selected_month:
         analyzed_data = analyzed_data[analyzed_data['Month'] == selected_month]
 
     if display_option == "Table":
         st.subheader("Analyzed Data Overview")
-        st.dataframe(analyzed_data.drop(columns=['Month']), use_container_width=True)  # Full-width dataframe
+        st.dataframe(analyzed_data.drop(columns=['Month']), use_container_width=True)
     elif display_option == "Bar Graph":
-        # Generate bar graph
         fig = go.Figure()
         fig.add_trace(go.Bar(
             x=analyzed_data['Day'],
@@ -112,25 +117,17 @@ if st.session_state.calculation_done:
             marker_color='red'
         ))
 
-        # Update layout to show all dates on x-axis
         fig.update_layout(
             barmode='group',
             title='Energy Loss Comparison (With and Without Clipping)',
             xaxis_title='Date',
             yaxis_title='Energy Loss (MWh)',
-            xaxis=dict(
-                tickmode='array',
-                tickvals=analyzed_data['Day'],  # Use every date as a tick
-                ticktext=analyzed_data['Day'],  # Use formatted dates for labels
-                tickangle=45  # Tilt labels for readability
-            ),
+            xaxis=dict(tickangle=45),
             template='plotly_dark'
         )
-        st.plotly_chart(fig, use_container_width=True)  # Full-width plot
+        st.plotly_chart(fig, use_container_width=True)
 
     selected_day = st.selectbox("Select a Day for Detailed Energy Curve", analyzed_data['Day'])
-
-    # Filter and create a detailed energy curve for the selected day
     selected_day_calculated_data = calculated_data[calculated_data['Date'] == selected_day]
 
     fig_curve = go.Figure()
@@ -148,19 +145,5 @@ if st.session_state.calculation_done:
         name='Incremented Energy MWh',
         line=dict(color='green')
     ))
-    fig_curve.add_trace(go.Scatter(
-        x=selected_day_calculated_data['Time Interval'],
-        y=[27.5] * len(selected_day_calculated_data),
-        mode='lines',
-        name='Clipping Line',
-        line=dict(color='red', dash='dash')
-    ))
-
-    fig_curve.update_layout(
-        title=f"Energy Curve for {selected_day}",
-        xaxis_title='Time Interval',
-        yaxis_title='Energy MWh',
-        xaxis=dict(tickangle=45),
-        template='plotly_dark'
-    )
-    st.plotly_chart(fig_curve, use_container_width=True)  # Full-width plot
+    fig_curve.update_layout(title=f"Energy Curve for {selected_day}", xaxis_title='Time Interval', yaxis_title='Energy MWh', template='plotly_dark')
+    st.plotly_chart(fig_curve, use_container_width=True)
