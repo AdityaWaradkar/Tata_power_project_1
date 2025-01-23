@@ -5,10 +5,8 @@ import os
 import shutil
 import plotly.graph_objects as go
 
-# Enable wide layout
 # Enable wide layout and set a custom title for the browser tab
 st.set_page_config(page_title="Loss Analyser", layout="wide")
-
 
 def initialize_session_state():
     if "calculation_done" not in st.session_state:
@@ -34,17 +32,12 @@ if uploaded_file is not None:
         with open(temp_excel_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
-        st.success(f"Excel file uploaded successfully and saved as 'project_1_data.xlsx' inside the assets folder!")
-
         from excel_to_csv import convert_excel_to_csv
         csv_file_name = 'data.csv'
 
         convert_excel_to_csv(uploaded_file, csv_file_name)
 
-        st.success("Excel file processed and converted to CSV successfully!")
-
         subprocess.run(['python', 'cleaning.py'], check=True)
-        st.success("Data cleaning completed successfully!")
 
         increment_value = st.number_input("Enter Increment Value (in MWh):", min_value=0, value=1, step=1)
         start_date = st.date_input("Select Start Date:", value=pd.to_datetime("2023-01-01").date())
@@ -57,10 +50,7 @@ if uploaded_file is not None:
                                 '--start_date', start_date.strftime("%d-%m-%Y"),
                                 '--end_date', end_date.strftime("%d-%m-%Y")], check=True)
 
-                st.success("Calculations completed successfully!")
-
                 subprocess.run(['python', 'analysis.py'], check=True)
-                st.success("Analysis completed successfully!")
 
                 results_file_path = os.path.join(assets_folder, 'analysed_data.csv')
                 st.session_state.analyzed_data = pd.read_csv(results_file_path)
@@ -76,6 +66,7 @@ if uploaded_file is not None:
     except Exception as e:
         st.error(f"An error occurred while processing the Excel file: {e}")
 
+
 if st.session_state.calculation_done:
     analyzed_data = st.session_state.analyzed_data
     calculated_data = st.session_state.calculated_data
@@ -90,9 +81,21 @@ if st.session_state.calculation_done:
         index=0  # Default to "Table"
     )
 
+    # Extract months from the date range if it spans more than one month
+    analyzed_data['Month'] = pd.to_datetime(analyzed_data['Day']).dt.strftime('%B %Y')
+    unique_months = analyzed_data['Month'].unique()
+
+    selected_month = None
+    if len(unique_months) > 1:
+        selected_month = st.selectbox("Select a Month:", unique_months)
+
+    # Filter data based on selected month
+    if selected_month:
+        analyzed_data = analyzed_data[analyzed_data['Month'] == selected_month]
+
     if display_option == "Table":
         st.subheader("Analyzed Data Overview")
-        st.dataframe(analyzed_data, use_container_width=True)  # Full-width dataframe
+        st.dataframe(analyzed_data.drop(columns=['Month']), use_container_width=True)  # Full-width dataframe
     elif display_option == "Bar Graph":
         # Generate bar graph
         fig = go.Figure()
@@ -161,4 +164,3 @@ if st.session_state.calculation_done:
         template='plotly_dark'
     )
     st.plotly_chart(fig_curve, use_container_width=True)  # Full-width plot
-
