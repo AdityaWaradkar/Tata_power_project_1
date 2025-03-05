@@ -78,15 +78,28 @@ if uploaded_file is not None:
         convert_excel_to_csv(uploaded_file, csv_file_name)
 
         subprocess.run(['python', 'cleaning.py'], check=True)
+        
+
+        # Load cleaned data
+        cleaned_data = pd.read_csv("../../assets/cleaned_data.csv")
+
+        # Convert date column
+        cleaned_data["Date"] = pd.to_datetime(cleaned_data["Date"], format="%d-%m-%Y")
+
+        # Set default start and end dates
+        min_date = cleaned_data["Date"].min().date()
+        max_date = cleaned_data["Date"].max().date()
 
         # Input values in a row
         col1, col2, col3 = st.columns(3)
+
         with col1:
             increment_value = st.number_input("Enter Increment Value (in MWh)", min_value=0, value=1, step=1)
         with col2:
-            start_date = st.date_input("Select Start Date", value=pd.to_datetime("2023-01-01").date())
+            start_date = st.date_input("Select Start Date", value=min_date, min_value=min_date, max_value=max_date)
         with col3:
-            end_date = st.date_input("Select End Date", value=pd.to_datetime("2023-12-31").date())
+            end_date = st.date_input("Select End Date", value=max_date, min_value=min_date, max_value=max_date)
+            
 
         # Center the button
         st.markdown("<br>", unsafe_allow_html=True)
@@ -253,7 +266,7 @@ if st.session_state.calculation_done:
         mode='lines+markers',
         name='Energy MWh',
         line=dict(color='blue', width=3),  # Increased thickness
-        marker=dict(size=6)
+        marker=dict(size=10)
     ))
     fig_curve.add_trace(go.Scatter(
         x=selected_day_calculated_data['Time Interval'],
@@ -261,7 +274,7 @@ if st.session_state.calculation_done:
         mode='lines+markers',
         name='Incremented Energy MWh',
         line=dict(color='green', width=3),  # Increased thickness
-        marker=dict(size=6)
+        marker=dict(size=10)
     ))
     fig_curve.add_trace(go.Scatter(
         x=selected_day_calculated_data['Time Interval'],
