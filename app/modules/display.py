@@ -166,7 +166,7 @@ if st.session_state.calculation_done:
     if display_option == "Table":
         # Highlight whole row where 'Loss_With_Clipping' is non-zero
         def highlight_row(row):
-            return ['background-color: red; color: white' if row['Loss_With_Clipping'] != 0 else '' for _ in row]
+            return ['background-color: red; color: white' if row['Loss_Difference'] != 0 else '' for _ in row]
 
         st.dataframe(
             analyzed_data.drop(columns=['Month']).style.apply(highlight_row, axis=1),
@@ -212,7 +212,7 @@ if st.session_state.calculation_done:
 
     elif display_option == "Explicit Bar Graph":
         # Filter data where Loss_With_Clipping is non-zero
-        filtered_data = analyzed_data[analyzed_data['Loss_With_Clipping'] != 0]
+        filtered_data = analyzed_data[analyzed_data['Loss_Difference'] != 0]
 
         # If there is data to display
         if not filtered_data.empty:
@@ -259,43 +259,62 @@ if st.session_state.calculation_done:
     selected_day = st.selectbox("Select a Day for Energy Curve", analyzed_data['Day'])
     selected_day_calculated_data = calculated_data[calculated_data['Date'] == selected_day]
 
+    # Compute clipped energy curve
+    clipping_threshold = 27.5
+    selected_day_calculated_data['clipped_energy MWh'] = selected_day_calculated_data['incremented_energy MWh'].apply(lambda x: min(x, clipping_threshold))
+
+    # Radio button for curve selection
+    curve_option = st.radio("Select Curve to Display", ["All Curves", "Energy MWh", "Incremented Energy MWh", "Clipped Energy MWh"], index=0)
+    
     fig_curve = go.Figure()
+    
+    if curve_option in ["All Curves", "Energy MWh"]:
+        fig_curve.add_trace(go.Scatter(
+            x=selected_day_calculated_data['Time Interval'],
+            y=selected_day_calculated_data['Energy MWh'],
+            mode='lines+markers',
+            name='Energy MWh',
+            line=dict(color='blue', width=3),  # Increased thickness
+            marker=dict(size=10)
+        ))
+    
+    if curve_option in ["All Curves", "Incremented Energy MWh"]:
+        fig_curve.add_trace(go.Scatter(
+            x=selected_day_calculated_data['Time Interval'],
+            y=selected_day_calculated_data['incremented_energy MWh'],
+            mode='lines+markers',
+            name='Incremented Energy MWh',
+            line=dict(color='green', width=3),  # Increased thickness
+            marker=dict(size=10)
+        ))
+    
+    if curve_option in ["All Curves", "Clipped Energy MWh"]:
+        fig_curve.add_trace(go.Scatter(
+            x=selected_day_calculated_data['Time Interval'],
+            y=selected_day_calculated_data['clipped_energy MWh'],
+            mode='lines+markers',
+            name='Clipped Energy MWh',
+            line=dict(color='orange', width=3),  # New clipped curve
+            marker=dict(size=10)
+        ))
+    
     fig_curve.add_trace(go.Scatter(
         x=selected_day_calculated_data['Time Interval'],
-        y=selected_day_calculated_data['Energy MWh'],
-        mode='lines+markers',
-        name='Energy MWh',
-        line=dict(color='blue', width=3),  # Increased thickness
-        marker=dict(size=10)
-    ))
-    fig_curve.add_trace(go.Scatter(
-        x=selected_day_calculated_data['Time Interval'],
-        y=selected_day_calculated_data['incremented_energy MWh'],
-        mode='lines+markers',
-        name='Incremented Energy MWh',
-        line=dict(color='green', width=3),  # Increased thickness
-        marker=dict(size=10)
-    ))
-    fig_curve.add_trace(go.Scatter(
-        x=selected_day_calculated_data['Time Interval'],
-        y=[27.5] * len(selected_day_calculated_data),  # Red dotted line at 27.5 MWh
+        y=[clipping_threshold] * len(selected_day_calculated_data),  # Red dashed line at threshold
         mode='lines',
         name='Threshold (27.5 MWh)',
-        line=dict(color='red', dash='dot', width=2)
+        line=dict(color='red', dash='dash', width=2)
     ))
 
     # Adding vertical lines for each x-axis point
-    vertical_lines = []
     for x_value in selected_day_calculated_data['Time Interval']:
-        vertical_lines.append(
-            go.layout.Shape(
-                type="line",
-                x0=x_value,
-                y0=0,
-                x1=x_value,
-                y1=max(selected_day_calculated_data['Energy MWh'].max(), selected_day_calculated_data['incremented_energy MWh'].max()),
-                line=dict(color="gray", width=1, dash="dot")
-            )
+        fig_curve.add_shape(
+            type="line",
+            x0=x_value,
+            y0=0,
+            x1=x_value,
+            y1=max(selected_day_calculated_data['Energy MWh'].max(), selected_day_calculated_data['incremented_energy MWh'].max(), selected_day_calculated_data['clipped_energy MWh'].max()),
+            line=dict(color="gray", width=1, dash="dot")
         )
 
     fig_curve.update_layout(
@@ -308,7 +327,6 @@ if st.session_state.calculation_done:
             tickvals=selected_day_calculated_data['Time Interval'],
             ticktext=selected_day_calculated_data['Time Interval']
         ),
-        shapes=vertical_lines,  # Adding the vertical lines
         template='plotly_white'
     )
     st.plotly_chart(fig_curve, use_container_width=True)
